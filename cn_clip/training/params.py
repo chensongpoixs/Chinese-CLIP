@@ -1,4 +1,6 @@
 import argparse
+import inspect
+import os
 
 
 def get_default_params(model_name):
@@ -14,7 +16,49 @@ def get_default_params(model_name):
 
 
 def parse_args():
+    """
+    解析命令行参数
+    
+    功能：
+    1. 创建参数解析器
+    2. 定义所有训练相关的命令行参数
+    3. 解析命令行参数
+    4. 应用模型默认参数（如果某些参数未指定）
+    5. 返回解析后的参数对象
+    """
+    # 获取当前文件名（用于调试和日志追踪）
+    current_file = os.path.basename(__file__)
+    
+    # 获取当前行号（用于调试和日志追踪）
+    current_line = inspect.currentframe().f_lineno
+    print(f"[{current_file}:{current_line}] ========== 开始执行 parse_args() 函数 ==========")
+    
+    # ============================================================================
+    # 步骤1: 创建参数解析器
+    # ============================================================================
+    current_line = inspect.currentframe().f_lineno
+    print(f"[{current_file}:{current_line}] 步骤1: 创建 ArgumentParser...")
     parser = argparse.ArgumentParser()
+    current_line = inspect.currentframe().f_lineno
+    print(f"[{current_file}:{current_line}] ✓ ArgumentParser 创建完成")
+    
+    # ============================================================================
+    # 步骤2: 定义所有命令行参数
+    # ============================================================================
+    current_line = inspect.currentframe().f_lineno
+    print(f"[{current_file}:{current_line}] 步骤2: 定义命令行参数...")
+    
+    # ============================================================================
+    # 分布式训练参数（由torch.distributed.launch自动传递）
+    # ============================================================================
+    # local-rank: 当前进程在当前节点中的本地GPU排名（0, 1, 2, ...）
+    # 这个参数由 torch.distributed.launch 自动传递，必须定义否则会报错
+    # 即使不使用，也要定义这个参数以避免 "unrecognized arguments" 错误
+    #parser.add_argument("--local-rank", type=int, default=0, help="Local rank for distributed training (automatically set by torch.distributed.launch)")
+    # parser.add_argument("--local-rank", "--local_rank", type=int)
+    # ============================================================================
+    # 数据相关参数
+    # ============================================================================
     parser.add_argument(
         "--train-data",
         type=str,
@@ -34,7 +78,7 @@ def parse_args():
         "--valid-num-workers", type=int, default=1, help="The number of workers for validation dataloader (if making validation)."
     )
     parser.add_argument(
-        "--logs",
+        "--logsfan",
         type=str,
         default="./logs/",
         help="Where to store logs. Use None to avoid storing logs.",
@@ -224,13 +268,68 @@ def parse_args():
         default=0.5,
         help="Weight of KD loss."
     )
+    # ============================================================================
+    # 步骤3: 解析命令行参数
+    # ============================================================================
+    current_line = inspect.currentframe().f_lineno
+    print(f"[{current_file}:{current_line}] 步骤3: 解析命令行参数...")
     args = parser.parse_args()
+    current_line = inspect.currentframe().f_lineno
+    print(f"[{current_file}:{current_line}] ✓ 命令行参数解析完成")
+    
+    # ============================================================================
+    # 步骤4: 处理聚合参数
+    # ============================================================================
+    current_line = inspect.currentframe().f_lineno
+    print(f"[{current_file}:{current_line}] 步骤4: 处理聚合参数 (aggregate = not skip_aggregate)...")
     args.aggregate = not args.skip_aggregate
+    current_line = inspect.currentframe().f_lineno
+    print(f"[{current_file}:{current_line}] ✓ 聚合参数设置完成: aggregate={args.aggregate}")
 
+    # ============================================================================
+    # 步骤5: 应用模型默认参数
+    # ============================================================================
     # If some params are not passed, we use the default values based on model name.
+    current_line = inspect.currentframe().f_lineno
+    print(f"[{current_file}:{current_line}] 步骤5: 应用模型默认参数 (vision_model={args.vision_model})...")
     default_params = get_default_params(args.vision_model)
+    current_line = inspect.currentframe().f_lineno
+    print(f"[{current_file}:{current_line}] 获取到的默认参数: {default_params}")
+    
     for name, val in default_params.items():
         if getattr(args, name) is None:
+            current_line = inspect.currentframe().f_lineno
+            print(f"[{current_file}:{current_line}] 应用默认参数: {name}={val}")
             setattr(args, name, val)
+    
+    current_line = inspect.currentframe().f_lineno
+    print(f"[{current_file}:{current_line}] ✓ 默认参数应用完成")
+    
+    # ============================================================================
+    # 步骤6: 打印所有解析后的参数
+    # ============================================================================
+    current_line = inspect.currentframe().f_lineno
+    print(f"[{current_file}:{current_line}] 步骤6: 打印所有解析后的参数...")
+    print(f"[{current_file}:{current_line}] " + "=" * 80)
+    print(f"[{current_file}:{current_line}] 所有训练参数列表:")
+    print(f"[{current_file}:{current_line}] " + "-" * 80)
+    
+    # 按参数名排序打印，便于查看
+    for name in sorted(vars(args).keys()):
+        val = getattr(args, name)
+        # 对于较长的字符串（如路径），截断显示
+        if isinstance(val, str) and len(val) > 100:
+            val_display = val[:100] + "..."
+        else:
+            val_display = val
+        print(f"[{current_file}:{current_line}]   {name:30s} = {val_display}")
+    
+    print(f"[{current_file}:{current_line}] " + "-" * 80)
+    current_line = inspect.currentframe().f_lineno
+    print(f"[{current_file}:{current_line}] ✓ 参数打印完成")
+    print(f"[{current_file}:{current_line}] " + "=" * 80)
+    
+    current_line = inspect.currentframe().f_lineno
+    print(f"[{current_file}:{current_line}] ========== parse_args() 函数执行完成 ==========")
 
     return args

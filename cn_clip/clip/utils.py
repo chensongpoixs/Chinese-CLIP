@@ -117,7 +117,8 @@ def load_from_name(name: str, device: Union[str, torch.device] = "cuda" if torch
 
     with open(model_path, 'rb') as opened_file:
         # loading saved checkpoint
-        checkpoint = torch.load(opened_file, map_location="cpu")
+        # PyTorch 2.6+ 默认使用 weights_only=True，需要设置为 False 以加载包含优化器状态的检查点
+        checkpoint = torch.load(opened_file, map_location="cpu", weights_only=False)
 
     model = create_model(model_name, checkpoint)
     if str(device) == "cpu":

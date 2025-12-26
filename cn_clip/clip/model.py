@@ -468,17 +468,28 @@ def convert_weights(model: nn.Module):
 def restore_model(model, clip_state_dict: dict, bert_state_dict: dict, use_flash_attention: bool):
     merged_state_dict = {}
 
+    # 处理键名中的 "module." 前缀（从DDP模型保存的检查点）
+    def remove_module_prefix(key):
+        """移除键名中的 'module.' 前缀"""
+        if key.startswith("module."):
+            return key[len("module."):]
+        return key
+
     # use clip_state_dict to initialize the image encoder & logit scale
     if clip_state_dict is not None:
         for k, v in clip_state_dict.items():
-            if k.startswith("visual") or k == "logit_scale":
-                merged_state_dict[k] = v
+            # 移除可能的 "module." 前缀
+            k_clean = remove_module_prefix(k)
+            if k_clean.startswith("visual") or k_clean == "logit_scale" or k_clean == "text_projection":
+                merged_state_dict[k_clean] = v
 
     # use bert_state_dict to initialize the text encoder
     if bert_state_dict is not None:
         for k, v in bert_state_dict.items():
-            if k.startswith("bert") and "bert.pooler" not in k:
-                merged_state_dict[k] = v
+            # 移除可能的 "module." 前缀
+            k_clean = remove_module_prefix(k)
+            if k_clean.startswith("bert") and "bert.pooler" not in k_clean:
+                merged_state_dict[k_clean] = v
 
     # adapt flash attention
     if use_flash_attention:

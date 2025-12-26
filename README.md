@@ -166,9 +166,37 @@ Chinese-CLIP目前开源5个不同规模，其模型信息和下载方式见下�
 ## 安装要求
 开始本项目前，需先检查是否满足下列环境配置要求:
 
+
+
+
+[pytorch历史版本安装：https://pytorch.ac.cn/get-started/previous-versions/](https://pytorch.ac.cn/get-started/previous-versions/)
+
+
+
+
 * python >= 3.6.4
 * pytorch >= 1.8.0 (with torchvision >= 0.9.0)
 * CUDA Version >= 10.2
+
+
+
+```
+
+ 
+我通过降版本解决了这个问题，试试这个（I solved the issue by downgrading, try this）：
+pip3 uninstall torch torchvision torchaudio，
+然后（and then)：
+pip install torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu118
+Looking in indexes: https://download.pytorch.org/whl/cu118
+```
+
+
+
+训练自己的模型的命令
+
+```
+python cn_clip/training/main.py     --train-data=datapath/datasets/MUGE/lmdb/train     --val-data=datapath/datasets/MUGE/lmdb/valid     --num-workers=0     --valid-num-workers=0     --resume=datapath/pretrained_weights/clip_cn_vit-b-16.pt     --reset-data-offset     --reset-optimizer     --logsfan=datapath/experiments/     --name=muge_finetune_vit-b-16_roberta-base_bs48_1gpu     --save-step-frequency=999999     --save-epoch-frequency=1     --report-training-batch-acc     --context-length=52     --warmup=100     --batch-size=48     --valid-batch-size=48     --valid-step-interval=1000     --valid-epoch-interval=1     --lr=3e-06     --wd=0.001     --max-epochs=10     --vision-model=ViT-B-16     --use-augment     --grad-checkpointing     --text-model=RoBERTa-wwm-ext-base-chinese --skip-aggregate
+``
 
 运行下列命令即可安装本项目所需的三方库。
 

@@ -16,6 +16,8 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.distributed import DistributedSampler
+from torch.utils.data import RandomSampler
+import torch.distributed as dist
 
 from torchvision.transforms import Compose, Resize, ToTensor, Normalize, InterpolationMode
 from timm.data import create_transform
@@ -132,7 +134,7 @@ def fetch_resolution(vision_model):
 @dataclass
 class DataInfo:
     dataloader: DataLoader
-    sampler: DistributedSampler
+    sampler: object  # 可以是 DistributedSampler 或 RandomSampler
     dataset: LMDBDataset
     epoch_id: int
 
@@ -155,7 +157,7 @@ def get_dataset(args, is_train, max_txt_length=64, epoch_id=0):
     # pad the dataset splits using the beginning samples in the LMDB files
     # to make the number of samples enough for a full final global batch
     batch_size = args.batch_size if is_train else args.valid_batch_size
-    global_batch_size = batch_size * torch.distributed.get_world_size()
+    global_batch_size = batch_size * 1; # torch.distributed.get_world_size()
     pad_dataset(dataset, global_batch_size)
 
     num_samples = dataset.dataset_len
@@ -163,8 +165,16 @@ def get_dataset(args, is_train, max_txt_length=64, epoch_id=0):
     # from sequential to shuffled (in a determistic order between experiments and epochs). 
     # This is to avoid there being one text matching multiple images (or vice versa) in a local batch
     # which will affect the correctness of computing the validation in-batch accuracy.
-    sampler = DistributedSampler(dataset, shuffle=True, seed=args.seed)
-    sampler.set_epoch(epoch_id if is_train else 0)
+    
+    # 如果分布式已初始化，使用 DistributedSampler；否则使用 RandomSampler（单节点训练）
+    if dist.is_initialized():
+        sampler = DistributedSampler(dataset, shuffle=True, seed=args.seed)
+        sampler.set_epoch(epoch_id if is_train else 0)
+    else:
+        # 单节点训练：使用 RandomSampler
+        generator = torch.Generator()
+        generator.manual_seed(args.seed + epoch_id)  # 确保每个epoch的随机性不同
+        sampler = RandomSampler(dataset, generator=generator)
 
     dataloader = DataLoader(
         dataset,

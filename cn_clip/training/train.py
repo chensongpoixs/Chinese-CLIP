@@ -50,7 +50,7 @@ def get_loss(model, images, texts, loss_img, loss_txt, args, accum_image_feature
         text_features = torch.cat(
             accum_text_features[:accum_idx] + [chunk_text_features] + accum_text_features[accum_idx + 1:])
     logit_scale = logit_scale.mean()
-    if args.aggregate:
+    if args.aggregate and dist.is_initialized():
         world_size = dist.get_world_size()
         rank = dist.get_rank()
 
@@ -128,7 +128,17 @@ def get_loss(model, images, texts, loss_img, loss_txt, args, accum_image_feature
 def freeze_vision_bn(args, model):
     # freeze bn running mean and variance
     if 'RN' in args.vision_model:
-        RN_visual_modules = model.module.visual.modules() if isinstance(model, nn.parallel.DistributedDataParallel) else model.visual.modules()
+        # 检查是否是DDP模型（需要访问model.module）或普通模型
+        # 对于我们的ModelWrapper，model.module 就是原始模型
+        if hasattr(model, 'module') and not isinstance(model, nn.parallel.DistributedDataParallel):
+            # ModelWrapper 的情况
+            RN_visual_modules = model.module.visual.modules()
+        elif isinstance(model, nn.parallel.DistributedDataParallel):
+            # 真正的DDP模型
+            RN_visual_modules = model.module.visual.modules()
+        else:
+            # 普通模型
+            RN_visual_modules = model.visual.modules()
         for m in RN_visual_modules:
             if isinstance(m, nn.BatchNorm2d):
                 m.eval()
@@ -148,7 +158,8 @@ def train(model, data, epoch, optimizer, scaler, scheduler, args, global_trained
     loss_img = loss_img.cuda(args.local_device_rank)
     loss_txt = loss_txt.cuda(args.local_device_rank)
 
-    if sampler is not None:
+    # set the epoch for the sampler (only for DistributedSampler)
+    if sampler is not None and hasattr(sampler, 'set_epoch'):
         sampler.set_epoch(epoch)
 
     num_steps_per_epoch = dataloader.num_batches // args.accum_freq
@@ -384,10 +395,13 @@ def evaluate(model, data, epoch, args, steps):
             if (i + 1) % 100 == 0:
                 logging.info("Evaluated {}/{} batches...".format(i + 1, dataloader.num_batches))
 
-        dist.all_reduce(cumulative_loss, op=dist.ReduceOp.SUM)
-        dist.all_reduce(cumulative_i2t_acc, op=dist.ReduceOp.SUM)
-        dist.all_reduce(cumulative_t2i_acc, op=dist.ReduceOp.SUM)
-        dist.all_reduce(num_elements, op=dist.ReduceOp.SUM)
+        # 如果分布式已初始化，则进行all_reduce；否则直接使用当前值（单节点训练）
+        if dist.is_initialized():
+            dist.all_reduce(cumulative_loss, op=dist.ReduceOp.SUM)
+            dist.all_reduce(cumulative_i2t_acc, op=dist.ReduceOp.SUM)
+            dist.all_reduce(cumulative_t2i_acc, op=dist.ReduceOp.SUM)
+            dist.all_reduce(num_elements, op=dist.ReduceOp.SUM)
+        # 如果分布式未初始化（单节点训练），直接使用当前值，不需要all_reduce
         loss = cumulative_loss / num_elements
         i2t_acc = cumulative_i2t_acc / num_elements
         t2i_acc = cumulative_t2i_acc / num_elements
