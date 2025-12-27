@@ -176,12 +176,58 @@ def get_dataset(args, is_train, max_txt_length=64, epoch_id=0):
         generator.manual_seed(args.seed + epoch_id)  # 确保每个epoch的随机性不同
         sampler = RandomSampler(dataset, generator=generator)
 
+    # ============================================================================
+    # 创建 DataLoader 数据加载器
+    # ============================================================================
+    # DataLoader 的作用：
+    #   1. 批量加载数据：将数据集中的样本按批次组织
+    #   2. 数据采样：使用指定的采样器（sampler）决定数据的访问顺序
+    #   3. 多进程加载：可选地使用多个工作进程并行加载数据（加速数据预处理）
+    #   4. 数据预取：提前加载下一批数据，减少GPU等待时间
+    #
+    # 参数说明：
+    #   dataset (LMDBDataset): 
+    #       - 要加载的数据集对象，包含LMDB数据库连接和数据转换逻辑
+    #       - 注意：LMDB的Environment对象无法被pickle，因此num_workers必须为0
+    #
+    #   batch_size (int):
+    #       - 每个批次包含的样本数量
+    #       - 训练时使用 args.batch_size，验证时使用 args.valid_batch_size
+    #       - 较大的batch_size可以提高GPU利用率，但需要更多显存
+    #
+    #   pin_memory (bool):
+    #       - 是否将数据固定到内存（固定内存，page-locked memory）
+    #       - True: 启用固定内存，数据从CPU传输到GPU更快（推荐在GPU训练时使用）
+    #       - False: 不固定内存，节省内存但传输稍慢
+    #       - 这里设置为False，因为LMDB数据可能较大，固定内存会占用更多RAM
+    #
+    #   num_workers (int):
+    #       - 用于数据加载的子进程数量
+    #       - 0: 使用主进程加载数据（单进程模式）
+    #       - >0: 使用多个子进程并行加载数据，可以加速数据预处理
+    #       - 注意：由于LMDBDataset在__init__中打开了Environment对象，
+    #         这些对象无法被pickle序列化，因此num_workers必须设置为0
+    #       - 训练时使用 args.num_workers，验证时使用 args.valid_num_workers
+    #
+    #   sampler (DistributedSampler | RandomSampler):
+    #       - 数据采样器，决定数据访问的顺序
+    #       - DistributedSampler: 分布式训练时使用，确保每个进程看到不同的数据子集
+    #       - RandomSampler: 单节点训练时使用，随机打乱数据顺序
+    #       - 如果使用sampler，则shuffle参数会被忽略（默认为False）
+    #
+    # 其他常用参数（此处未使用）：
+    #   - shuffle (bool): 是否在每个epoch开始时打乱数据（使用sampler时无效）
+    #   - drop_last (bool): 是否丢弃最后一个不完整的批次（默认False）
+    #   - collate_fn (callable): 自定义的批次合并函数（默认使用torch的默认函数）
+    #   - prefetch_factor (int): 每个worker预取的批次数（默认2）
+    #   - persistent_workers (bool): 是否保持worker进程存活（默认False）
+    # ============================================================================
     dataloader = DataLoader(
-        dataset,
-        batch_size=batch_size,
-        pin_memory=False,
-        num_workers=args.num_workers if is_train else args.valid_num_workers,
-        sampler=sampler,
+        dataset,                                    # 数据集对象（LMDBDataset）
+        batch_size=batch_size,                      # 批次大小（训练或验证）
+        pin_memory=False,                           # 不固定内存（节省RAM，适合LMDB大数据集）
+        num_workers=args.num_workers if is_train else args.valid_num_workers,  # 工作进程数（必须为0，因为LMDB Environment无法pickle）
+        sampler=sampler,                            # 数据采样器（DistributedSampler或RandomSampler）
     )
 
     dataloader.num_samples = num_samples
