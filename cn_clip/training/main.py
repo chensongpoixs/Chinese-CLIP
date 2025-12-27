@@ -47,8 +47,8 @@ elif os.environ.get('MASTER_ADDR', '').lower() not in ['localhost', '127.0.0.1',
     # 对于单机训练，强制使用localhost
     import platform
     if platform.system() == 'Windows':
-        print(f"Warning: MASTER_ADDR is set to '{os.environ['MASTER_ADDR']}' which may not work on Windows.")
-        print("Changing MASTER_ADDR to 'localhost' for single-node training.")
+        logging.warning(f"MASTER_ADDR is set to '{os.environ['MASTER_ADDR']}' which may not work on Windows.")
+        logging.info("Changing MASTER_ADDR to 'localhost' for single-node training.")
         os.environ['MASTER_ADDR'] = 'localhost'
 
 # 设置端口（如果未通过命令行指定）
@@ -64,7 +64,18 @@ import json            # JSON配置文件解析
 import time            # 时间处理
 from time import gmtime, strftime  # 时间格式化
 import importlib.util  # 动态模块导入（用于检查flash_attn是否安装）
-import inspect         # 用于获取当前代码行号
+
+# ============================================================================
+# 初始化基础日志系统（在正式日志系统设置之前使用）
+# ============================================================================
+# 配置一个基本的日志系统，用于在正式日志系统初始化之前的日志输出
+# 这样在日志系统初始化之前的所有日志也能正常输出
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s | %(levelname)s | %(message)s',
+    datefmt='%Y-%m-%d,%H:%M:%S',
+    force=True  # 如果已经配置过，强制重新配置
+)
 
 # ============================================================================
 # PyTorch相关导入
@@ -92,9 +103,9 @@ from cn_clip.training.scheduler import cosine_lr  # 余弦学习率调度器
 
 
 import torch # 如果pytorch安装成功即可导入
-print(torch.cuda.is_available()) # 查看CUDA是否可用，如果True表示可以使用
-print(torch.cuda.device_count()) # 查看可用的CUDA数量，0表示有一个
-print(torch.version.cuda) # 查看CUDA的版本号
+# print(torch.cuda.is_available()) # 查看CUDA是否可用，如果True表示可以使用
+# print(torch.cuda.device_count()) # 查看可用的CUDA数量，0表示有一个
+# print(torch.version.cuda) # 查看CUDA的版本号
 
 
 
@@ -172,34 +183,25 @@ def main():
     14. 执行训练循环
     15. 保存检查点
     """
-    # 获取当前文件名（用于调试和日志追踪）
-    current_file = os.path.basename(__file__)
-    
-    # 获取当前行号（用于调试和日志追踪）
-    current_line = inspect.currentframe().f_lineno
-    print(f"[{current_file}:{current_line}] ========== 开始执行 main() 函数 ==========")
+    logging.info("========== 开始执行 main() 函数 ==========")
     
     # ========================================================================
     # 步骤1: 解析命令行参数
     # ========================================================================
-    current_line = inspect.currentframe().f_lineno
-    print(f"[{current_file}:{current_line}] 步骤1: 解析命令行参数...")
+    logging.info("步骤1: 解析命令行参数...")
     args = parse_args()
-    current_line = inspect.currentframe().f_lineno
-    print(f"[{current_file}:{current_line}] ✓ 参数解析完成")
+    logging.info("✓ 参数解析完成")
 
     # ========================================================================
     # 步骤2: 初始化分布式训练环境
     # ========================================================================
-    current_line = inspect.currentframe().f_lineno
-    print(f"[{current_file}:{current_line}] 步骤2: 初始化分布式训练环境...")
+    logging.info("步骤2: 初始化分布式训练环境...")
     # 获取当前进程的本地GPU设备编号（由torch.distributed.launch自动设置）
     # LOCAL_RANK是当前进程在单机多GPU训练中的GPU编号（0, 1, 2, ...）
     # 对于单GPU训练，LOCAL_RANK=0（使用GPU 0）
     # 如果环境变量中没有LOCAL_RANK（不使用分布式训练），则默认为0
     args.local_device_rank =  int(os.environ.get("LOCAL_RANK", "0"))
-    current_line = inspect.currentframe().f_lineno
-    print(f"[{current_file}:{current_line}] 获取本地GPU设备编号: LOCAL_RANK={args.local_device_rank}")
+    logging.info(f"获取本地GPU设备编号: LOCAL_RANK={args.local_device_rank}")
     
     # 设置当前进程使用的CUDA设备
     # 对于单GPU训练，使用GPU 0
@@ -208,8 +210,7 @@ def main():
     # 创建设备对象，指向指定的GPU
     #args.device = torch.device("cuda", args.local_device_rank)
     #args.device = torch.cuda.set_device("cuda:0");
-    current_line = inspect.currentframe().f_lineno
-    print(f"[{current_file}:{current_line}] ✓ CUDA设备设置完成: {args.device}")
+    logging.info(f"✓ CUDA设备设置完成: {args.device}")
 
     # ========================================================================
     # 初始化分布式进程组（Process Group）
@@ -321,8 +322,7 @@ def main():
     # 注意：train.py 中使用了 dist.get_world_size(), dist.get_rank(), dist.all_gather() 等函数
     # 如果 Windows 上的 GLOO 后端不可用，我们将设置 aggregate=False 来避免使用分布式函数
     # 但 evaluate 函数中仍然使用了 dist.all_reduce()，需要特殊处理
-    current_line = inspect.currentframe().f_lineno
-    print(f"[{current_file}:{current_line}] 尝试初始化单进程分布式进程组（单节点训练）...")
+    logging.info("尝试初始化单进程分布式进程组（单节点训练）...")
     
     # 检查是否已经初始化了分布式进程组
     dist_initialized = False
@@ -337,8 +337,7 @@ def main():
                 os.environ['MASTER_PORT'] = '29500'
             
             # 尝试使用 gloo 后端，使用 tcp 初始化方法
-            current_line = inspect.currentframe().f_lineno
-            print(f"[{current_file}:{current_line}] 尝试使用 GLOO 后端 (tcp://{os.environ.get('MASTER_ADDR')}:{os.environ.get('MASTER_PORT')})...")
+            logging.info(f"尝试使用 GLOO 后端 (tcp://{os.environ.get('MASTER_ADDR')}:{os.environ.get('MASTER_PORT')})...")
             
             dist.init_process_group(
                 backend="gloo",
@@ -347,21 +346,18 @@ def main():
                 world_size=1
             )
             dist_initialized = True
-            current_line = inspect.currentframe().f_lineno
-            print(f"[{current_file}:{current_line}] ✓ 使用 GLOO 后端初始化单进程分布式进程组成功")
+            logging.info("✓ 使用 GLOO 后端初始化单进程分布式进程组成功")
         except Exception as e:
             # 如果初始化失败，设置 aggregate=False 并跳过分布式初始化
-            current_line = inspect.currentframe().f_lineno
-            print(f"[{current_file}:{current_line}] 警告: 无法初始化分布式进程组: {e}")
-            print(f"[{current_file}:{current_line}] 提示: Windows 上的 GLOO 后端可能不可用，将使用单节点模式（跳过聚合）")
-            print(f"[{current_file}:{current_line}] 设置 aggregate=False 以避免使用分布式函数")
+            logging.warning(f"无法初始化分布式进程组: {e}")
+            logging.info("提示: Windows 上的 GLOO 后端可能不可用，将使用单节点模式（跳过聚合）")
+            logging.info("设置 aggregate=False 以避免使用分布式函数")
             args.aggregate = False  # 禁用聚合，避免使用分布式函数
             args.skip_aggregate = True
             dist_initialized = False
     else:
         dist_initialized = True
-        current_line = inspect.currentframe().f_lineno
-        print(f"[{current_file}:{current_line}] 分布式进程组已初始化，跳过")
+        logging.info("分布式进程组已初始化，跳过")
     
     # 获取当前进程的全局排名（单节点训练时 rank=0）
     if dist_initialized:
@@ -372,18 +368,13 @@ def main():
         args.rank = 0
         args.world_size = 1
     
-    current_line = inspect.currentframe().f_lineno
-    print(f"[{current_file}:{current_line}] args.rank: {args.rank}, args.world_size: {args.world_size}")  # 调试输出
-    print("--------------------------------");
-    current_line = inspect.currentframe().f_lineno
-    #print(f"[{current_file}:{current_line}] args.world_size: {args.world_size}")  # 调试输出：总进程数
-    print("--------------------------------");  
+    logging.debug(f"args.rank: {args.rank}, args.world_size: {args.world_size}")  # 调试输出
+    
     
     # ========================================================================
     # 步骤3: 设置输出路径和日志系统
     # ========================================================================
-    current_line = inspect.currentframe().f_lineno
-    print(f"[{current_file}:{current_line}] 步骤3: 设置输出路径和日志系统...")
+    logging.info("步骤3: 设置输出路径和日志系统...")
     # 生成时间戳后缀，格式：YYYY-MM-DD-HH-MM-SS
     # 用于区分同一实验名称的不同运行实例，避免日志和检查点被覆盖
     time_suffix = strftime("%Y-%m-%d-%H-%M-%S", gmtime())
@@ -424,20 +415,18 @@ def main():
     # 工作进程（rank>0）通过队列将日志消息发送给主进程
     # 主进程统一写入文件，避免多进程同时写文件造成冲突
     setup_worker_logging(args.rank, log_queue, args.log_level)
-    current_line = inspect.currentframe().f_lineno
-    print(f"[{current_file}:{current_line}] ✓ 日志系统设置完成")
+    logging.info("✓ 日志系统设置完成")
 
     # ========================================================================
     # 步骤4: 构建CLIP模型
     # ========================================================================
-    current_line = inspect.currentframe().f_lineno
-    print(f"[{current_file}:{current_line}] 步骤4: 构建CLIP模型...")
+    logging.info("步骤4: 构建CLIP模型...")
     # 加载视觉模型配置文件
     # 配置文件路径: cn_clip/clip/model_configs/{vision_model}.json
     # 例如: ViT-B-16 -> ViT-B-16.json, ViT-L/14 -> ViT-L-14.json
     # 配置文件包含：embed_dim, image_resolution, vision_layers, vision_width等
     vision_model_config_file = Path(__file__).parent.parent / f"clip/model_configs/{args.vision_model.replace('/', '-')}.json"
-    print('Loading vision model config from', vision_model_config_file)
+    logging.info(f'Loading vision model config from {vision_model_config_file}')
     assert os.path.exists(vision_model_config_file), f"Vision model config not found: {vision_model_config_file}"
     
     # 加载文本模型配置文件
@@ -445,7 +434,7 @@ def main():
     # 例如: RoBERTa-wwm-ext-base-chinese -> RoBERTa-wwm-ext-base-chinese.json
     # 配置文件包含：vocab_size, text_hidden_size, text_num_layers等
     text_model_config_file = Path(__file__).parent.parent / f"clip/model_configs/{args.text_model.replace('/', '-')}.json"
-    print('Loading text model config from', text_model_config_file)
+    logging.info(f'Loading text model config from {text_model_config_file}')
     assert os.path.exists(text_model_config_file), f"Text model config not found: {text_model_config_file}"
     
     # 合并视觉和文本模型配置
@@ -490,14 +479,12 @@ def main():
     #   3. 处理权重名称不匹配的情况（如添加/移除"module."前缀）
     #   4. 如果使用FlashAttention，转换权重格式
     load(model, clip_path=args.clip_weight_path, bert_path=args.bert_weight_path, use_flash_attention=args.use_flash_attention)
-    current_line = inspect.currentframe().f_lineno
-    print(f"[{current_file}:{current_line}] ✓ CLIP模型构建完成")
+    logging.info("✓ CLIP模型构建完成")
 
     # ========================================================================
     # 步骤5: 模型精度和优化设置
     # ========================================================================
-    current_line = inspect.currentframe().f_lineno
-    print(f"[{current_file}:{current_line}] 步骤5: 配置模型精度和优化选项...")
+    logging.info("步骤5: 配置模型精度和优化选项...")
     # 对于AMP或FP32训练，确保模型参数为FP32格式
     # 参考: https://discuss.pytorch.org/t/valueerror-attemting-to-unscale-fp16-gradients/81372
     if args.precision == "amp" or args.precision == "fp32":
@@ -540,8 +527,7 @@ def main():
     # ========================================================================
     # 步骤6: 单节点训练配置（不使用DistributedDataParallel）
     # ========================================================================
-    current_line = inspect.currentframe().f_lineno
-    print(f"[{current_file}:{current_line}] 步骤6: 配置单节点训练（不使用DDP）...")
+    logging.info("步骤6: 配置单节点训练（不使用DDP）...")
     
     # 单节点单GPU训练：直接将模型移动到GPU，不使用DistributedDataParallel
     # 这样可以避免DDP的开销，简化训练流程
@@ -644,14 +630,12 @@ def main():
     if args.precision == "fp16":
         convert_weights(model._model)
     
-    current_line = inspect.currentframe().f_lineno
-    print(f"[{current_file}:{current_line}] ✓ 单节点训练配置完成（模型已移动到 {args.device}）")
+    logging.info(f"✓ 单节点训练配置完成（模型已移动到 {args.device}）")
 
     # ========================================================================
     # 步骤7: 初始化数据集和数据加载器
     # ========================================================================
-    current_line = inspect.currentframe().f_lineno
-    print(f"[{current_file}:{current_line}] 步骤7: 初始化数据集和数据加载器...")
+    logging.info("步骤7: 初始化数据集和数据加载器...")
     # get_data函数会：
     #   1. 加载LMDB格式的训练数据集（如果指定train_data）
     #   2. 加载LMDB格式的验证数据集（如果指定val_data）
@@ -661,14 +645,12 @@ def main():
     # epoch_id: 当前epoch编号，用于某些需要epoch相关数据增强的场景
     # max_txt_length: 文本最大长度（token数），超过此长度的文本会被截断
     data = get_data(args, epoch_id=0, max_txt_length=args.context_length)
-    current_line = inspect.currentframe().f_lineno
-    print(f"[{current_file}:{current_line}] ✓ 数据集和数据加载器初始化完成")
+    logging.info("✓ 数据集和数据加载器初始化完成")
 
     # ========================================================================
     # 步骤8: 初始化优化器和学习率调度器
     # ========================================================================
-    current_line = inspect.currentframe().f_lineno
-    print(f"[{current_file}:{current_line}] 步骤8: 初始化优化器和学习率调度器...")
+    logging.info("步骤8: 初始化优化器和学习率调度器...")
     # 定义参数分组规则（用于不同的权重衰减策略）
     # 为什么需要分组？
     #   - BatchNorm/LayerNorm的scale和bias参数通常不使用权重衰减
@@ -744,14 +726,12 @@ def main():
     #   4. 如果梯度溢出，跳过本次更新并增大缩放因子
     # 注意：只有使用AMP（自动混合精度）时才需要scaler
     scaler = GradScaler() if args.precision == "amp" else None
-    current_line = inspect.currentframe().f_lineno
-    print(f"[{current_file}:{current_line}] ✓ 优化器和学习率调度器初始化完成")
+    logging.info("✓ 优化器和学习率调度器初始化完成")
 
     # ========================================================================
     # 步骤9: 记录和保存超参数
     # ========================================================================
-    current_line = inspect.currentframe().f_lineno
-    print(f"[{current_file}:{current_line}] 步骤9: 记录和保存超参数...")
+    logging.info("步骤9: 记录和保存超参数...")
     # 主进程保存超参数到文件
     if is_master(args):
         logging.info("Params:")
@@ -767,8 +747,7 @@ def main():
             val = getattr(args, name)
             logging.info(f"  {name}: {val}")
     logging.info(f"Use GPU: {args.local_device_rank} for training")
-    current_line = inspect.currentframe().f_lineno
-    print(f"[{current_file}:{current_line}] ✓ 超参数记录完成")
+    logging.info("✓ 超参数记录完成")
 
     # 关于mask_ratio的提示（FLIP策略仅支持ViT，不支持ResNet）
     if is_master(args) and args.mask_ratio > 0 and args.vision_model in ['RN50']:
@@ -778,8 +757,7 @@ def main():
     # ========================================================================
     # 步骤10: 加载检查点（如果存在）
     # ========================================================================
-    current_line = inspect.currentframe().f_lineno
-    print(f"[{current_file}:{current_line}] 步骤10: 加载检查点（如果存在）...")
+    logging.info("步骤10: 加载检查点（如果存在）...")
     start_epoch = 0  # 起始epoch
     steps = 0        # 起始步数
     
@@ -838,42 +816,35 @@ def main():
             logging.info(
                 f"=> loaded checkpoint '{args.resume}' (epoch {checkpoint['epoch']} @ {steps} steps)"
             )
-            current_line = inspect.currentframe().f_lineno
-            print(f"[{current_file}:{current_line}] ✓ 检查点加载完成: epoch {checkpoint['epoch']} @ {steps} steps")
+            logging.info(f"✓ 检查点加载完成: epoch {checkpoint['epoch']} @ {steps} steps")
         else:
             logging.info("=> no checkpoint found at '{}'".format(args.resume))
-            current_line = inspect.currentframe().f_lineno
-            print(f"[{current_file}:{current_line}] 未找到检查点，从头开始训练")
+            logging.info("未找到检查点，从头开始训练")
     else:
-        current_line = inspect.currentframe().f_lineno
-        print(f"[{current_file}:{current_line}] 未指定检查点路径，从头开始训练")
+        logging.info("未指定检查点路径，从头开始训练")
 
     # ========================================================================
     # 步骤11: CUDA优化设置
     # ========================================================================
-    current_line = inspect.currentframe().f_lineno
-    print(f"[{current_file}:{current_line}] 步骤11: 配置CUDA优化设置...")
+    logging.info("步骤11: 配置CUDA优化设置...")
     cudnn.benchmark = True        # 启用CUDNN自动调优，加速训练（但可能降低可复现性）
     cudnn.deterministic = False   # 允许非确定性算法，提高性能
-    current_line = inspect.currentframe().f_lineno
-    print(f"[{current_file}:{current_line}] ✓ CUDA优化设置完成")
+    logging.info("✓ CUDA优化设置完成")
 
     # ========================================================================
     # 步骤12: 确定是否保存日志和检查点
     # ========================================================================
     # 只有主进程（rank=0）才保存日志和检查点，避免多进程重复保存
     args.should_save = (args.logsfan is not None and args.logsfan != '' and args.logsfan.lower() != 'none') and is_master(args)
-    current_line = inspect.currentframe().f_lineno
-    print(f"[{current_file}:{current_line}] 步骤12: 确定保存设置 (should_save={args.should_save})...")
+    logging.info(f"步骤12: 确定保存设置 (should_save={args.should_save})...")
 
     # ========================================================================
     # 步骤13: 加载教师模型（用于知识蒸馏）
     # ========================================================================
-    current_line = inspect.currentframe().f_lineno
     if args.distillation:
-        print(f"[{current_file}:{current_line}] 步骤13: 加载教师模型（知识蒸馏）...")
+        logging.info("步骤13: 加载教师模型（知识蒸馏）...")
     else:
-        print(f"[{current_file}:{current_line}] 步骤13: 跳过教师模型加载（未启用知识蒸馏）")
+        logging.info("步骤13: 跳过教师模型加载（未启用知识蒸馏）")
     if args.distillation:
         try:
             from modelscope.models import Model
@@ -917,30 +888,27 @@ def main():
         # 使用相同的 ModelWrapper 包装以兼容 train.py 中的 teacher_model.module 引用
         teacher_model = ModelWrapper(teacher_model)
         logging.info(f"Teacher model loaded from {args.teacher_model_name}")
-        current_line = inspect.currentframe().f_lineno
-        print(f"[{current_file}:{current_line}] ✓ 教师模型加载完成: {args.teacher_model_name}")
+        logging.info(f"✓ 教师模型加载完成: {args.teacher_model_name}")
     else:
         teacher_model = None
 
     # ========================================================================
     # 步骤14: 训练循环
     # ========================================================================
-    current_line = inspect.currentframe().f_lineno
-    print(f"[{current_file}:{current_line}] 步骤14: 开始训练循环 (从epoch {start_epoch} 到 {args.max_epochs})...")
-    print(f"[{current_file}:{current_line}] ========== 所有初始化完成，开始训练 ==========")
+    logging.info(f"步骤14: 开始训练循环 (从epoch {start_epoch} 到 {args.max_epochs})...")
+    logging.info("========== 所有初始化完成，开始训练 ==========")
     # 从start_epoch开始训练，直到max_epochs
     # start_epoch可能是0（从头训练）或从检查点恢复的epoch编号
     for epoch in range(start_epoch, args.max_epochs):
-        current_line = inspect.currentframe().f_lineno
-        print(f"[{current_file}:{current_line}] ========== 开始训练 Epoch {epoch + 1}/{args.max_epochs} ==========")
+        logging.info(f"========== 开始训练 Epoch {epoch + 1}/{args.max_epochs} ==========")
         
         # 记录当前epoch开始（只有主进程记录）
         if is_master(args) == 0:
             logging.info(f'Start epoch {epoch + 1}')
         
         # 执行训练
-        current_line = inspect.currentframe().f_lineno
-        print(f"[{current_file}:{current_line}] 开始执行训练 (epoch {epoch + 1})...")
+        logging.info(f"开始执行训练 (epoch {epoch + 1})...")
+        logging.info(f"model:{model}, data:{data}, epoch:{epoch}, \n optimizer:{optimizer}, scaler:{scaler}, \nscheduler:{scheduler}, args:{args}, steps:{steps}");
         # train函数会：
         #   1. 遍历训练数据加载器
         #   2. 前向传播计算损失（对比学习损失）
@@ -958,12 +926,10 @@ def main():
         
         # 累计总步数（用于学习率调度和日志记录）
         steps += num_steps_this_epoch
-        current_line = inspect.currentframe().f_lineno
-        print(f"[{current_file}:{current_line}] ✓ Epoch {epoch + 1} 训练完成，总步数: {steps}")
+        logging.info(f"✓ Epoch {epoch + 1} 训练完成，总步数: {steps}")
 
         # 执行验证（如果满足验证条件）
-        current_line = inspect.currentframe().f_lineno
-        print(f"[{current_file}:{current_line}] 检查是否需要执行验证...")
+        logging.info("检查是否需要执行验证...")
         # 验证条件：
         #   1. 指定了验证数据集（val_data不为None）
         #   2. 指定了验证间隔（valid_epoch_interval不为None）
@@ -975,16 +941,14 @@ def main():
             #   1. 在验证集上计算图像和文本特征
             #   2. 计算检索指标（R@1, R@5, R@10等）
             #   3. 记录验证结果到日志
-            current_line = inspect.currentframe().f_lineno
-            print(f"[{current_file}:{current_line}] 开始执行验证 (epoch {epoch + 1})...")
+            logging.info(f"开始执行验证 (epoch {epoch + 1})...")
             if not args.use_flash_attention:
                 evaluate(model, data, epoch, args, steps)
             else:
                 # FlashAttention需要FP16精度，使用autocast上下文管理器
                 with torch.cuda.amp.autocast():
                     evaluate(model, data, epoch, args, steps)
-            current_line = inspect.currentframe().f_lineno
-            print(f"[{current_file}:{current_line}] ✓ 验证完成 (epoch {epoch + 1})")
+            logging.info(f"✓ 验证完成 (epoch {epoch + 1})")
 
         # 如果还有下一个epoch，为下一个epoch重新加载数据集和数据加载器
         # 这样可以支持每个epoch使用不同的数据增强策略
@@ -996,9 +960,8 @@ def main():
         # 步骤15: 保存检查点
         # ====================================================================
         # 只有主进程且本epoch有训练步数时才保存检查点
-        current_line = inspect.currentframe().f_lineno
         if args.should_save and num_steps_this_epoch > 0:
-            print(f"[{current_file}:{current_line}] 步骤15: 保存检查点 (epoch {epoch + 1})...")
+            logging.info(f"步骤15: 保存检查点 (epoch {epoch + 1})...")
         if args.should_save and num_steps_this_epoch > 0:
             # 保存定期检查点（根据save_epoch_frequency或最后一个epoch）
             # 保存条件：
@@ -1029,8 +992,7 @@ def main():
                     save_path,
                 )
                 logging.info("Saved checkpoint {} (epoch {} @ {} steps) (writing took {} seconds)".format(save_path, epoch + 1, steps, time.time() - t1))
-                current_line = inspect.currentframe().f_lineno
-                print(f"[{current_file}:{current_line}] ✓ 定期检查点已保存: {save_path}")
+                logging.info(f"✓ 定期检查点已保存: {save_path}")
             
             # 保存最新检查点（每个epoch都保存，用于自动恢复训练）
             # 文件名固定为：epoch_latest.pt
@@ -1048,8 +1010,7 @@ def main():
                 save_path,
             )
             logging.info("Saved checkpoint {} (epoch {} @ {} steps) (writing took {} seconds)".format(save_path, epoch + 1, steps, time.time() - t1))
-            current_line = inspect.currentframe().f_lineno
-            print(f"[{current_file}:{current_line}] ✓ 最新检查点已保存: {save_path}")
+            logging.info(f"✓ 最新检查点已保存: {save_path}")
 
 
 # ============================================================================

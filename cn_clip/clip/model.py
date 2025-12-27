@@ -181,7 +181,12 @@ class QuickGELU(nn.Module):
     def forward(self, x: torch.Tensor):
         return x * torch.sigmoid(1.702 * x)
 
+"""
+BAC 是一种特殊的注意力机制，它利用“残差”（Residual）和“注意力”（Attention）的结合，来更有效地学习图像中的细节和上下文。
 
+残差 (Residual): BAC 引入了残差连接，这意味着它不仅关注输入数据，还“跳跃”到输入数据中更深层的信息。 这样可以帮助模型更好地捕捉图像中的复杂关系和特征。
+注意力 (Attention): BAC 使用注意力机制来学习不同图像区域之间的关联。它会“关注”图像中的重要区域，并根据它们之间的关系来调整计算结果。
+"""
 class ResidualAttentionBlock(nn.Module):
     def __init__(self, d_model: int, n_head: int, attn_mask: torch.Tensor = None, use_flash_attention: bool = False):
         super().__init__()

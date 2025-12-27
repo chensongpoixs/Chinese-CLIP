@@ -41,31 +41,31 @@ class LMDBDataset(Dataset):
         self.lmdb_path = lmdb_path
 
         # assert LMDB directories exist
-        assert os.path.isdir(lmdb_path), "The LMDB directory {} of {} split does not exist!".format(lmdb_path, split)
-        lmdb_pairs = os.path.join(lmdb_path, "pairs")
-        assert os.path.isdir(lmdb_pairs), "The LMDB directory {} of {} image-text pairs does not exist!".format(lmdb_pairs, split)
-        lmdb_imgs = os.path.join(lmdb_path, "imgs")
-        assert os.path.isdir(lmdb_imgs), "The LMDB directory {} of {} image base64 strings does not exist!".format(lmdb_imgs, split)
+        assert os.path.isdir(lmdb_path), "The LMDB directory {} of {} split does not exist!".format(lmdb_path, split);
+        lmdb_pairs = os.path.join(lmdb_path, "pairs");
+        assert os.path.isdir(lmdb_pairs), "The LMDB directory {} of {} image-text pairs does not exist!".format(lmdb_pairs, split);
+        lmdb_imgs = os.path.join(lmdb_path, "imgs");
+        assert os.path.isdir(lmdb_imgs), "The LMDB directory {} of {} image base64 strings does not exist!".format(lmdb_imgs, split);
 
         # open LMDB files
-        self.env_pairs = lmdb.open(lmdb_pairs, readonly=True, create=False, lock=False, readahead=False, meminit=False)
-        self.txn_pairs = self.env_pairs.begin(buffers=True)
-        self.env_imgs = lmdb.open(lmdb_imgs, readonly=True, create=False, lock=False, readahead=False, meminit=False)
-        self.txn_imgs = self.env_imgs.begin(buffers=True)
+        self.env_pairs = lmdb.open(lmdb_pairs, readonly=True, create=False, lock=False, readahead=False, meminit=False);
+        self.txn_pairs = self.env_pairs.begin(buffers=True);
+        self.env_imgs = lmdb.open(lmdb_imgs, readonly=True, create=False, lock=False, readahead=False, meminit=False);
+        self.txn_imgs = self.env_imgs.begin(buffers=True);
 
         # fetch number of pairs and images
-        self.number_samples = int(self.txn_pairs.get(key=b'num_samples').tobytes().decode('utf-8'))
-        self.number_images = int(self.txn_imgs.get(key=b'num_images').tobytes().decode('utf-8'))
-        logging.info("{} LMDB file contains {} images and {} pairs.".format(split, self.number_images, self.number_samples))
+        self.number_samples = int(self.txn_pairs.get(key=b'num_samples').tobytes().decode('utf-8'));
+        self.number_images = int(self.txn_imgs.get(key=b'num_images').tobytes().decode('utf-8'));
+        logging.info("{} LMDB file contains {} images and {} pairs.".format(split, self.number_images, self.number_samples));
 
         super(LMDBDataset, self).__init__()
 
         # the self.dataset_len will be edited to a larger value by calling pad_dataset()
-        self.dataset_len = self.number_samples
-        self.global_batch_size = 1 # will be modified to the exact global_batch_size after calling pad_dataset()
+        self.dataset_len = self.number_samples;
+        self.global_batch_size = 1; # will be modified to the exact global_batch_size after calling pad_dataset()
 
-        self.split = split
-        self.max_txt_length = max_txt_length        
+        self.split = split;
+        self.max_txt_length = max_txt_length;        
 
         self.use_augment = use_augment
         self.transform = self._build_transform(resolution)
@@ -81,15 +81,15 @@ class LMDBDataset(Dataset):
                              interpolation='bicubic',
                              mean=(0.48145466, 0.4578275, 0.40821073),
                              std=(0.26862954, 0.26130258, 0.27577711),
-                         )
-            transform = Compose(transform.transforms[:-3] + [_convert_to_rgb] + transform.transforms[-3:])
+                         );
+            transform = Compose(transform.transforms[:-3] + [_convert_to_rgb] + transform.transforms[-3:]);
         else:
             transform = Compose([
                 Resize((resolution, resolution), interpolation=InterpolationMode.BICUBIC),
                 _convert_to_rgb,
                 ToTensor(),
                 Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711)),
-            ])
+            ]);
         return transform
 
     def __del__(self):

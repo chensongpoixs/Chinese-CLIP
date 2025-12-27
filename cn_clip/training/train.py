@@ -162,8 +162,9 @@ def train(model, data, epoch, optimizer, scaler, scheduler, args, global_trained
     if sampler is not None and hasattr(sampler, 'set_epoch'):
         sampler.set_epoch(epoch)
 
+     
     num_steps_per_epoch = dataloader.num_batches // args.accum_freq
-    data_iter = iter(dataloader)
+    data_iter = iter(dataloader); #  iter(dataloader);
 
     if args.accum_freq > 1:
         accum_images, accum_texts, accum_image_features, accum_text_features = [], [], [], []
